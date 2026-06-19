@@ -3,7 +3,7 @@
 ## Commands
 | Task | Command |
 |---|---|
-| Type-check | `pnpm tsc --noEmit` (run from each package root) |
+| Type-check | `pnpm tsc` (runs `tsc --noEmit` in every package via turbo) |
 | Unit tests | `pnpm test` |
 | Build | `pnpm build` |
 
@@ -22,5 +22,5 @@ Check: layout not broken, graph view renders, note content correct.
 `README.md` — update for any user-facing API or CLI change.
 
 ## Project-Specific Gates
-- `pnpm tsc --noEmit` must be clean across all packages before any PR.
+- `pnpm tsc` must be clean across all packages before any PR (build packages first with `pnpm build`).
 - Prisma schema must pass DSQL constraints (no SERIAL, no FK, no @updatedAt, no sync indexes).

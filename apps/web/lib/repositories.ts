@@ -1,6 +1,6 @@
 import { createDsqlRepositories } from "@vault-publish/db";
 import type { Repositories } from "@vault-publish/db";
-import getPrisma from "./db.js";
+import getPrisma from "./db";
 
 /**
  * Returns repository instances backed by the DSQL-connected Prisma client.

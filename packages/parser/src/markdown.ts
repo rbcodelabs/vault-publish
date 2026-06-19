@@ -111,13 +111,14 @@ function escapeHtml(text: string): string {
 
 export function countWords(text: string): number {
   const stripped = text
-    .replace(/```[\s\S]*?```/g, "")
-    .replace(/`[^`]+`/g, "")
-    .replace(/!\[\[[^\]]+\]\]/g, "")
-    .replace(/\[\[[^\]]+\]\]/g, (m) => {
+    .replace(/```[\s\S]*?```/g, "")        // fenced code blocks
+    .replace(/`[^`]+`/g, "")               // inline code
+    .replace(/!\[\[[^\]]+\]\]/g, "")       // embeds
+    .replace(/\[\[[^\]]+\]\]/g, (m) => {   // wikilinks → alias or text
       const pipe = m.indexOf("|");
       return pipe !== -1 ? m.slice(pipe + 1, -2) : m.slice(2, -2);
     })
-    .replace(/#[a-zA-Z][a-zA-Z0-9_/-]*/g, "");
+    .replace(/^#{1,6}\s+.+$/gm, "")        // headings (excluded from word count)
+    .replace(/#[a-zA-Z][a-zA-Z0-9_/-]*/g, ""); // inline tags
   return stripped.trim().split(/\s+/).filter(Boolean).length;
 }

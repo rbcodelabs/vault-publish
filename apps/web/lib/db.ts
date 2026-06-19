@@ -4,7 +4,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { DsqlSigner } from "@aws-sdk/dsql-signer";
 import { awsCredentialsProvider } from "@vercel/functions/oidc";
 import { attachDatabasePool } from "@vercel/functions";
-import { getActiveSchema } from "./schema.js";
+import { getActiveSchema } from "./schema";
 
 declare global {
   // eslint-disable-next-line no-var

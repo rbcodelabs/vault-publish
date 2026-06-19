@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { NextRequest } from "next/server";
-import { getRepositories } from "./repositories.js";
+import { getRepositories } from "./repositories";
 import type { User } from "@vault-publish/db";
 
 /** SHA-256 hex digest of a plaintext API key. */

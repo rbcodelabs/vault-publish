@@ -1,4 +1,4 @@
-import { describe, it, expect } from "@jest/globals";
+import { describe, it, expect } from "vitest";
 import { hasPublishTrue, filterChanged } from "../scanner.js";
 import type { ScannedNote, PushCache } from "../scanner.js";
 
