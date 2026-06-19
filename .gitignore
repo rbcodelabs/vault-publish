@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+
+# Build output
+.next/
+dist/
+out/
+build/
+
+# Turbo cache
+.turbo/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Vercel
+.vercel/
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Prisma generated client
+apps/web/prisma/generated/
+
+# pnpm
+.pnpm-store/
+
+# Logs
+*.log
+npm-debug.log*

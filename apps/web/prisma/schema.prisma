@@ -1,0 +1,43 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider     = "postgresql"
+  relationMode = "prisma"
+  url          = env("DATABASE_URL")
+}
+
+model User {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  username    String   @unique @db.VarChar(50)
+  apiKeyHash  String   @unique @map("api_key_hash") @db.VarChar(255)
+  displayName String?  @map("display_name") @db.VarChar(100)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("users")
+}
+
+model Note {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  slug        String   @db.VarChar(500)
+  title       String   @db.VarChar(500)
+  blobUrl     String   @map("blob_url") @db.VarChar(2000)
+  frontmatter Json     @default("{}")
+  outlinks    String[] @default([])
+  tags        String[] @default([])
+  wordCount   Int      @default(0) @map("word_count")
+  updatedAt   DateTime @default(now()) @map("updated_at")
+
+  @@unique([userId, slug])
+  @@map("notes")
+}
+
+model VaultGraph {
+  userId    String   @id @map("user_id") @db.Uuid
+  manifest  Json
+  updatedAt DateTime @default(now()) @map("updated_at")
+
+  @@map("vault_graphs")
+}

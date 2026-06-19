@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans, Arial, Helvetica, sans-serif);
+}
+
+/* Wikilink styles */
+a.wikilink {
+  color: #7c3aed;
+  text-decoration: none;
+  border-bottom: 1px dashed #7c3aed;
+}
+a.wikilink:hover {
+  border-bottom-style: solid;
+}
+
+/* Callout styles */
+.callout {
+  border-left: 4px solid #7c3aed;
+  padding: 0.75rem 1rem;
+  margin: 1rem 0;
+  background: #f5f3ff;
+  border-radius: 0.25rem;
+}
+.callout-title {
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+  text-transform: capitalize;
+}
+
+/* Embed placeholder */
+.embed-note {
+  border: 1px dashed #d1d5db;
+  padding: 0.5rem 1rem;
+  border-radius: 0.25rem;
+  background: #f9fafb;
+  font-style: italic;
+  color: #6b7280;
+}
+
+/* Tag badges */
+.tag {
+  display: inline-block;
+  background: #ede9fe;
+  color: #5b21b6;
+  border-radius: 9999px;
+  padding: 0 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
