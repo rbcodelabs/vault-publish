@@ -25,8 +25,8 @@ model Note {
   title       String   @db.VarChar(500)
   blobUrl     String   @map("blob_url") @db.VarChar(2000)
   frontmatter Json     @default("{}")
-  outlinks    String[] @default([])
-  tags        String[] @default([])
+  outlinks    Json     @default("[]")
+  tags        Json     @default("[]")
   wordCount   Int      @default(0) @map("word_count")
   updatedAt   DateTime @default(now()) @map("updated_at")
 

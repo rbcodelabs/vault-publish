@@ -58,8 +58,18 @@ class DsqlUserRepository implements UserRepository {
 class DsqlNoteRepository implements NoteRepository {
   constructor(private readonly db: PrismaClientLike) {}
 
+  // DSQL stores arrays as JSONB. Prisma returns them as unknown (Json type).
+  // Cast back to string[] on the way out.
+  private toNote(row: any): Note {
+    return {
+      ...row,
+      outlinks: (row.outlinks as string[]) ?? [],
+      tags: (row.tags as string[]) ?? [],
+    };
+  }
+
   async upsert(data: UpsertNoteInput): Promise<Note> {
-    return this.db.note.upsert({
+    const row = await this.db.note.upsert({
       where: { userId_slug: { userId: data.userId, slug: data.slug } },
       create: {
         userId: data.userId,
@@ -82,19 +92,22 @@ class DsqlNoteRepository implements NoteRepository {
         updatedAt: new Date(),
       },
     });
+    return this.toNote(row);
   }
 
   async findBySlug(userId: string, slug: string): Promise<Note | null> {
-    return this.db.note.findUnique({
+    const row = await this.db.note.findUnique({
       where: { userId_slug: { userId, slug } },
     });
+    return row ? this.toNote(row) : null;
   }
 
   async listByUser(userId: string): Promise<Note[]> {
-    return this.db.note.findMany({
+    const rows = await this.db.note.findMany({
       where: { userId },
       orderBy: { updatedAt: "desc" },
     });
+    return rows.map((r: any) => this.toNote(r));
   }
 
   async delete(userId: string, slug: string): Promise<void> {

@@ -43,10 +43,17 @@ async function getMigrationSQL(): Promise<string> {
 
 // DSQL requires one DDL statement per transaction.
 function splitStatements(sql: string): string[] {
-  return sql
+  // Strip comment lines BEFORE splitting on ";" — a comment containing ";"
+  // (e.g. "-- placeholder; produced at build time") would otherwise split into
+  // two fragments, the second of which isn't a comment and gets executed.
+  const stripped = sql
+    .split("\n")
+    .filter((line) => !line.trim().startsWith("--"))
+    .join("\n");
+  return stripped
     .split(";")
     .map((s) => s.trim())
-    .filter((s) => s && !s.startsWith("--"));
+    .filter(Boolean);
 }
 
 // ---------------------------------------------------------------------------
