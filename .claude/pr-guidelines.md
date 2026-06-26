@@ -24,3 +24,4 @@ Check: layout not broken, graph view renders, note content correct.
 ## Project-Specific Gates
 - `pnpm tsc` must be clean across all packages before any PR (build packages first with `pnpm build`).
 - Prisma schema must pass DSQL constraints (no SERIAL, no FK, no @updatedAt, no sync indexes).
+- **New or upgraded packages:** run `npm show <pkg> dist-tags.latest` and confirm the installed version matches. Never install a package without checking the current latest — training data versions are stale.
