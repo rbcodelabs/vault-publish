@@ -11,6 +11,7 @@
     "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@aws-sdk/credential-provider-web-identity": "^3.972.55",
     "@aws-sdk/dsql-signer": "^3.798.0",
     "@prisma/adapter-pg": "^6.2.1",
     "@prisma/client": "^6.2.1",
