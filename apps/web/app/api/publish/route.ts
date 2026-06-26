@@ -7,7 +7,12 @@ import { authenticateRequest } from "@/lib/auth";
 import { getRepositories } from "@/lib/repositories";
 
 // POST /api/publish
-// Body: multipart — slug (string), title (string), markdown (string)
+// Body: multipart form fields:
+//   slug        string  required  URL slug (or original vault path; permalink overrides)
+//   markdown    string  required  Raw Obsidian markdown
+//   title       string  optional  Page title (falls back to H1 or slug)
+//   description string  optional  Meta description (from frontmatter `description`)
+//   image       string  optional  OG image URL (from frontmatter `image` or `cover`)
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const user = await authenticateRequest(req);
   if (!user) {
@@ -32,13 +37,28 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     );
   }
 
-  // Parse Obsidian markdown
+  // Parse Obsidian markdown — this also extracts frontmatter, tags, outlinks, etc.
   const parsed = parseObsidianMarkdown(markdown, user.username);
   const outlinks = resolveWikilinks(
     parsed.wikilinks.filter((l) => !l.isEmbed).map((l) => l.target)
   );
 
-  // Upload raw markdown to Vercel Blob
+  // Merge any extra metadata passed by the CLI (description, image) into
+  // the stored frontmatter so the web app can render them as meta tags.
+  // CLI already extracts these from YAML, but sending them explicitly is
+  // more reliable than depending on the parser to surface them.
+  const extraDescription = formData.get("description");
+  const extraImage = formData.get("image");
+  const mergedFrontmatter: Record<string, unknown> = {
+    ...(parsed.frontmatter as Record<string, unknown>),
+    ...(extraDescription ? { description: String(extraDescription) } : {}),
+    ...(extraImage ? { image: String(extraImage) } : {}),
+  };
+
+  // Upload raw markdown to Vercel Blob.
+  // Blob is keyed by username+slug (the effective published slug, which may
+  // be a permalink). This keeps blob keys stable if a note is renamed but
+  // keeps the same permalink.
   const blobPath = `${user.username}/${slug}.md`;
   const blob = await put(blobPath, markdown, {
     access: "public",
@@ -54,7 +74,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     slug,
     title: title || parsed.title || slug,
     blobUrl: blob.url,
-    frontmatter: parsed.frontmatter,
+    frontmatter: mergedFrontmatter,
     outlinks,
     tags: parsed.tags,
     wordCount: parsed.wordCount,
@@ -77,22 +97,25 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   });
 }
 
-// DELETE /api/publish
-// Body: JSON { slug: string }
+// DELETE /api/publish?slug=<slug>  OR  body: { slug: string }
 export async function DELETE(req: NextRequest): Promise<NextResponse> {
   const user = await authenticateRequest(req);
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: { slug?: string };
-  try {
-    body = await req.json() as { slug?: string };
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  // Accept slug from query string OR JSON body
+  let slug = new URL(req.url).searchParams.get("slug") ?? "";
+  if (!slug) {
+    try {
+      const body = await req.json() as { slug?: string };
+      slug = String(body.slug ?? "").trim();
+    } catch {
+      // ignore parse errors
+    }
   }
+  slug = slug.trim();
 
-  const slug = String(body.slug ?? "").trim();
   if (!slug) {
     return NextResponse.json({ error: "slug is required" }, { status: 400 });
   }
@@ -108,7 +131,6 @@ export async function DELETE(req: NextRequest): Promise<NextResponse> {
   try {
     await del(existing.blobUrl);
   } catch {
-    // Log but don't fail — the blob may already be gone
     console.warn(`Failed to delete blob for ${slug}: ${existing.blobUrl}`);
   }
 

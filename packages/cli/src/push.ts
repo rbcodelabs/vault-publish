@@ -1,12 +1,11 @@
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";
+import { createHash } from "node:crypto";
 import type { VaultPublishConfig } from "./config.js";
-import { scanVault, filterChanged, type PushCache } from "./scanner.js";
+import { scanVault, filterChanged, type PushCache, type ScanOptions } from "./scanner.js";
 
 function cachePath(vaultDir: string): string {
-  // Stable cache file keyed by vault path hash
-  const { createHash } = require("node:crypto") as typeof import("node:crypto");
   const key = createHash("sha256").update(vaultDir).digest("hex").slice(0, 16);
   return join(homedir(), ".vault-publish", `cache-${key}.json`);
 }
@@ -26,42 +25,58 @@ async function writeCache(vaultDir: string, cache: PushCache): Promise<void> {
   await writeFile(p, JSON.stringify(cache, null, 2), "utf8");
 }
 
+export interface PushOptions extends ScanOptions {
+  /** Also delete notes from the server that were removed from the vault.
+   *  Off by default (safe default). */
+  prune?: boolean;
+}
+
 export interface PushResult {
   pushed: number;
   skipped: number;
+  deleted: number;
   errors: Array<{ slug: string; error: string }>;
 }
 
 export async function pushVault(
   config: VaultPublishConfig,
   vaultDir: string,
+  options: PushOptions = {},
   log: (msg: string) => void = console.log
 ): Promise<PushResult> {
   log(`Scanning ${vaultDir}...`);
-  const notes = await scanVault(vaultDir);
+  const notes = await scanVault(vaultDir, options);
   log(`Found ${notes.length} publishable note(s).`);
 
   const cache = await readCache(vaultDir);
   const changed = filterChanged(notes, cache);
   const skipped = notes.length - changed.length;
 
-  if (changed.length === 0) {
+  if (changed.length === 0 && !options.prune) {
     log("Nothing changed — all notes are up to date.");
-    return { pushed: 0, skipped, errors: [] };
+    return { pushed: 0, skipped, deleted: 0, errors: [] };
   }
 
-  log(`Pushing ${changed.length} changed note(s)...`);
   const errors: Array<{ slug: string; error: string }> = [];
   const newCache = { ...cache };
+
+  // ── Push changed notes ──────────────────────────────────────────────────
+  if (changed.length > 0) {
+    log(`Pushing ${changed.length} changed note(s)...`);
+  }
 
   for (const note of changed) {
     try {
       const formData = new FormData();
       formData.append("slug", note.slug);
       formData.append("markdown", note.content);
-      // Derive title from slug as fallback
+
+      // Title: frontmatter > H1 (parsed server-side) > slug filename
       const titleFallback = note.slug.split("/").pop() ?? note.slug;
-      formData.append("title", titleFallback);
+      formData.append("title", note.meta.title ?? titleFallback);
+
+      if (note.meta.description) formData.append("description", note.meta.description);
+      if (note.meta.image) formData.append("image", note.meta.image);
 
       const response = await fetch(`${config.apiEndpoint}/api/publish`, {
         method: "POST",
@@ -75,8 +90,9 @@ export async function pushVault(
         continue;
       }
 
-      newCache[note.slug] = note.sha256;
-      log(`  pushed: ${note.slug}`);
+      // Cache by vaultPath — stable even when permalink changes.
+      newCache[note.vaultPath] = note.sha256;
+      log(`  ✓ ${note.slug}${note.slug !== note.vaultPath ? ` (← ${note.vaultPath})` : ""}`);
     } catch (err) {
       errors.push({
         slug: note.slug,
@@ -85,6 +101,47 @@ export async function pushVault(
     }
   }
 
+  // ── Prune removed notes ─────────────────────────────────────────────────
+  let deleted = 0;
+  if (options.prune) {
+    const publishedVaultPaths = new Set(notes.map((n) => n.vaultPath));
+    const removedVaultPaths = Object.keys(cache).filter(
+      (p) => !publishedVaultPaths.has(p)
+    );
+
+    if (removedVaultPaths.length > 0) {
+      log(`Deleting ${removedVaultPaths.length} removed note(s)...`);
+    }
+
+    for (const vaultPath of removedVaultPaths) {
+      try {
+        const response = await fetch(`${config.apiEndpoint}/api/publish`, {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${config.apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ slug: vaultPath }),
+        });
+
+        if (!response.ok && response.status !== 404) {
+          const text = await response.text();
+          errors.push({ slug: vaultPath, error: `HTTP ${response.status}: ${text}` });
+          continue;
+        }
+
+        delete newCache[vaultPath];
+        deleted++;
+        log(`  ✗ ${vaultPath} (deleted)`);
+      } catch (err) {
+        errors.push({
+          slug: vaultPath,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+  }
+
   await writeCache(vaultDir, newCache);
-  return { pushed: changed.length - errors.length, skipped, errors };
+  return { pushed: changed.length - errors.length, skipped, deleted, errors };
 }
