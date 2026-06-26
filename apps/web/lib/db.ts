@@ -6,12 +6,16 @@ import { awsCredentialsProvider } from "@vercel/functions/oidc";
 import { attachDatabasePool } from "@vercel/functions";
 import { getActiveSchema } from "./schema";
 
-declare global {
-  // eslint-disable-next-line no-var
-  var __prisma: PrismaClient | undefined;
-}
-
-async function createPrismaClient(): Promise<PrismaClient> {
+/**
+ * Creates a Prisma client with a fresh DSQL-signed pg pool.
+ *
+ * IMPORTANT: This must be called once per request, not cached globally.
+ * awsCredentialsProvider() reads the x-vercel-oidc-token from the active
+ * Vercel request context. If the client is cached across requests the OIDC
+ * token from the original request is reused (or lost), causing a
+ * "x-vercel-oidc-token header is missing" error on subsequent calls.
+ */
+export default async function getPrisma(): Promise<PrismaClient> {
   const host = process.env.PGHOST;
   if (!host) {
     throw new Error(
@@ -20,6 +24,8 @@ async function createPrismaClient(): Promise<PrismaClient> {
   }
 
   const schema = getActiveSchema();
+
+  // Create a fresh signer bound to the current request's OIDC token.
   const signer = new DsqlSigner({
     credentials: awsCredentialsProvider({ roleArn: process.env.AWS_ROLE_ARN! }),
     region: process.env.AWS_REGION!,
@@ -31,26 +37,15 @@ async function createPrismaClient(): Promise<PrismaClient> {
     host,
     user: process.env.PGUSER ?? "admin",
     database: process.env.PGDATABASE ?? "postgres",
+    // password is a function so pg re-signs on each new connection
     password: () => signer.getDbConnectAdminAuthToken(),
     port: 5432,
     ssl: true,
-    max: 20,
+    // Small pool per-request — Vercel functions are short-lived
+    max: 5,
   });
 
   attachDatabasePool(pool);
   const adapter = new PrismaPg(pool, { schema });
   return new PrismaClient({ adapter } as ConstructorParameters<typeof PrismaClient>[0]);
-}
-
-let prismaPromise: Promise<PrismaClient> | undefined;
-
-export default function getPrisma(): Promise<PrismaClient> {
-  if (global.__prisma) return Promise.resolve(global.__prisma);
-  if (!prismaPromise) {
-    prismaPromise = createPrismaClient().then((client) => {
-      if (process.env.NODE_ENV !== "production") global.__prisma = client;
-      return client;
-    });
-  }
-  return prismaPromise;
 }
