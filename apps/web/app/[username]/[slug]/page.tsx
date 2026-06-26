@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import type { Metadata } from "next";
 import { getRepositories } from "@/lib/repositories";
 import { parseObsidianMarkdown } from "@vault-publish/parser";
 import MiniGraph from "@/components/MiniGraph";
@@ -10,6 +11,51 @@ export const revalidate = 60;
 interface Props {
   params: Promise<{ username: string; slug: string }>;
 }
+
+// ---------------------------------------------------------------------------
+// Dynamic <head> metadata (OG / Twitter cards, description, title)
+// ---------------------------------------------------------------------------
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { username, slug } = await params;
+  const repos = await getRepositories();
+
+  const user = await repos.users.findByUsername(username);
+  if (!user) return {};
+
+  const note = await repos.notes.findBySlug(user.id, slug);
+  if (!note) return {};
+
+  const fm = (note.frontmatter ?? {}) as Record<string, unknown>;
+  const description =
+    typeof fm.description === "string" ? fm.description : undefined;
+  const image =
+    typeof fm.image === "string"
+      ? fm.image
+      : typeof fm.cover === "string"
+      ? fm.cover
+      : undefined;
+
+  return {
+    title: note.title,
+    description,
+    openGraph: {
+      title: note.title,
+      description,
+      ...(image ? { images: [{ url: image }] } : {}),
+    },
+    twitter: {
+      card: image ? "summary_large_image" : "summary",
+      title: note.title,
+      description,
+      ...(image ? { images: [image] } : {}),
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
 
 export default async function NotePage({ params }: Props) {
   const { username, slug } = await params;
