@@ -9,21 +9,18 @@ import type { GraphManifest } from "@vault-publish/db";
 export const revalidate = 60;
 
 interface Props {
-  params: Promise<{ username: string; slug: string }>;
+  params: Promise<{ username: string; slug: string[] }>;
 }
-
-// ---------------------------------------------------------------------------
-// Dynamic <head> metadata (OG / Twitter cards, description, title)
-// ---------------------------------------------------------------------------
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { username, slug } = await params;
+  const slugStr = slug.join("/");
   const repos = await getRepositories();
 
   const user = await repos.users.findByUsername(username);
   if (!user) return {};
 
-  const note = await repos.notes.findBySlug(user.id, slug);
+  const note = await repos.notes.findBySlug(user.id, slugStr);
   if (!note) return {};
 
   const fm = (note.frontmatter ?? {}) as Record<string, unknown>;
@@ -53,33 +50,27 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-// ---------------------------------------------------------------------------
-// Page
-// ---------------------------------------------------------------------------
-
 export default async function NotePage({ params }: Props) {
   const { username, slug } = await params;
+  const slugStr = slug.join("/");
   const repos = await getRepositories();
 
   const user = await repos.users.findByUsername(username);
   if (!user) notFound();
 
-  const note = await repos.notes.findBySlug(user.id, slug);
+  const note = await repos.notes.findBySlug(user.id, slugStr);
   if (!note) notFound();
 
-  // Fetch raw markdown from Vercel Blob and re-render
   const response = await fetch(note.blobUrl, { next: { revalidate: 60 } });
   if (!response.ok) notFound();
   const markdown = await response.text();
   const parsed = parseObsidianMarkdown(markdown, username);
 
-  // Find backlinks: notes whose outlinks include this slug
   const allNotes = await repos.notes.listByUser(user.id);
   const backlinks = allNotes.filter(
-    (n) => n.slug !== slug && n.outlinks.includes(slug)
+    (n) => n.slug !== slugStr && n.outlinks.includes(slugStr)
   );
 
-  // Graph for mini view
   const manifest = await repos.graphs.findByUser(user.id);
 
   return (
@@ -94,7 +85,6 @@ export default async function NotePage({ params }: Props) {
       </div>
 
       <div className="flex gap-8">
-        {/* Note content */}
         <article className="flex-1 min-w-0">
           <header className="mb-8">
             <h1 className="text-4xl font-bold text-gray-900 mb-3">
@@ -130,9 +120,7 @@ export default async function NotePage({ params }: Props) {
           />
         </article>
 
-        {/* Sidebar */}
         <aside className="w-72 shrink-0 space-y-6">
-          {/* Mini graph */}
           {manifest && (
             <section className="border rounded-xl p-4">
               <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
@@ -140,13 +128,12 @@ export default async function NotePage({ params }: Props) {
               </h2>
               <MiniGraph
                 manifest={manifest as GraphManifest}
-                currentSlug={slug}
+                currentSlug={slugStr}
                 username={username}
               />
             </section>
           )}
 
-          {/* Backlinks */}
           {backlinks.length > 0 && (
             <section className="border rounded-xl p-4">
               <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
